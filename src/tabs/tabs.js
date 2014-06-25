@@ -13,18 +13,16 @@ angular.module('mm.foundation.tabs', [])
   var ctrl = this,
       tabs = ctrl.tabs = $scope.tabs = [];
 
+  // We simplified this method: now it simply executes the provided selectExpression
   ctrl.select = function(tab) {
-    angular.forEach(tabs, function(tab) {
-      tab.active = false;
-    });
-    tab.active = true;
+    tab.selectExpression(tab.$parent);
   };
 
+  // This method used to default the first to active
+  // Now tab.active is maintained through the provided activeExpression
+  // So we never actually set it internal to this plugin
   ctrl.addTab = function addTab(tab) {
     tabs.push(tab);
-    if (tabs.length === 1 || tab.active) {
-      ctrl.select(tab);
-    }
   };
 
   ctrl.removeTab = function removeTab(tab) {
@@ -165,6 +163,7 @@ angular.module('mm.foundation.tabs', [])
   </file>
 </example>
  */
+
 .directive('tab', ['$parse', function($parse) {
   return {
     require: '^tabset',
@@ -174,6 +173,7 @@ angular.module('mm.foundation.tabs', [])
     transclude: true,
     scope: {
       heading: '@',
+      // TODO: is this broken now?
       onSelect: '&select', //This callback is called in contentHeadingTransclude
                           //once it inserts the tab's content into the dom
       onDeselect: '&deselect'
@@ -184,6 +184,17 @@ angular.module('mm.foundation.tabs', [])
     compile: function(elm, attrs, transclude) {
       return function postLink(scope, elm, attrs, tabsetCtrl) {
         var getActive, setActive;
+
+        // Here we parse the provided selectExpression
+        // This expression is executed when the tab is clicked/selected
+        // It is responsible for making appropriate state changes, such that getActive now returns appropriate values
+        // Fill in your logic here!
+        if (attrs.select) {
+          scope.selectExpression = $parse(attrs.select);
+        }
+
+        // This expression is now the only thing controlling whether a tab is selected
+        // We no longer set scope.active/tab.active, except in response to changes to the result of this expression
         if (attrs.active) {
           getActive = $parse(attrs.active);
           setActive = getActive.assign;
@@ -200,17 +211,16 @@ angular.module('mm.foundation.tabs', [])
           setActive = getActive = angular.noop;
         }
 
-        scope.$watch('active', function(active) {
-          // Note this watcher also initializes and assigns scope.active to the
-          // attrs.active expression.
-          setActive(scope.$parent, active);
-          if (active) {
-            tabsetCtrl.select(scope);
-            scope.onSelect();
-          } else {
-            scope.onDeselect();
-          }
-        });
+        // Commented out because:
+        // 1: two-way binding is limited to variables
+        // 2: We no longer toggle scope.active internal to this directive/plugin, so don't need to trigger responses
+        // TODO: I've disabled the select and deselect callbacks since I'm using the namespace to set the select expression. Fix this?
+        
+        //scope.$watch('active', function(active) {
+          //// Note this watcher also initializes and assigns scope.active to the
+          //// attrs.active expression.
+          ////setActive(scope.$parent, active);
+        //});
 
         scope.disabled = false;
         if ( attrs.disabled ) {
@@ -221,7 +231,7 @@ angular.module('mm.foundation.tabs', [])
 
         scope.select = function() {
           if ( ! scope.disabled ) {
-            scope.active = true;
+            scope.selectExpression(scope.$parent);
           }
         };
 
@@ -286,3 +296,4 @@ angular.module('mm.foundation.tabs', [])
 })
 
 ;
+
